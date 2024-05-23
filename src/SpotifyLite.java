@@ -1,0 +1,196 @@
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
+import javazoom.jl.decoder.JavaLayerException;
+import javazoom.jl.player.advanced.AdvancedPlayer;
+
+public class SpotifyLite {
+    private static AdvancedPlayer player;
+    private static Thread playerThread;
+    private static boolean isPlaying = false;
+    private static List<String> playlist = new ArrayList<>();
+    private static int currentSongIndex = -1;       
+
+    public static void main(String[] args) throws Exception {
+        Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/music_db", "root", "");
+        if (connection != null) {
+            System.out.println("Connected to the database.");
+        } else {
+            System.out.println("Connection to the database failed.");
+        }
+
+        Scanner scanner = new Scanner(System.in);
+
+        while (true) {
+            System.out.println();
+            System.out.println("╔══════════════════════════════════╗");
+            System.out.println("║        SpotifyLite Menu          ║");
+            System.out.println("╠══════════════════════════════════╣");
+            System.out.println("║ 1. List all songs                ║");
+            System.out.println("║ 2. Play a song                   ║");
+            System.out.println("║ 3. Pause/Resume                  ║");
+            System.out.println("║ 4. Play next song                ║");
+            System.out.println("║ 5. Play previous song            ║");
+            System.out.println("║ 6. Exit                          ║");
+            System.out.println("╚══════════════════════════════════╝");
+            System.out.println();
+            
+            System.out.print("Enter your choice: ");
+
+            int choice = scanner.nextInt();
+
+            switch (choice) {
+                case 1:
+                    listAllSongs(connection);
+                    break;
+                case 2:
+                    playSong(connection);
+                    break;
+                case 3:
+                    togglePlayPause();
+                    break;
+                case 4:
+                    playNextSong(connection);
+                    break;
+                case 5:
+                    playPreviousSong(connection);
+                    break;
+                case 6:
+                    if (isPlaying) {
+                        stopPlaying();
+                    }
+                    System.out.println();
+                    System.out.println("Thank you for using SpotifyLite! Have a joyful day !");
+                    System.out.println();
+                    connection.close();
+                    return;
+                default:
+                    System.out.println("Invalid choice. Please try again.");
+                    break;
+            }
+        }
+    }
+
+    private static void listAllSongs(Connection connection) throws Exception {
+        String query = "SELECT * FROM songs";
+        try (PreparedStatement preparedStatement = connection.prepareStatement(query);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+    
+            playlist.clear();
+            currentSongIndex = -1;
+    
+            // Print the header of the table
+            System.out.println("-----------------------------------------------------------------------------");
+            System.out.printf("%-10s%-40s%-30s\n", "Song ID", "Title", "Artist");
+            System.out.println("-----------------------------------------------------------------------------");
+    
+            while (resultSet.next()) {
+                int id = resultSet.getInt("id");
+                String title = resultSet.getString("title");
+                String artist = resultSet.getString("artist");
+                String filePath = resultSet.getString("file_path");
+    
+                // Print each song as a row in the table
+                System.out.printf("%-10d%-40s%-30s\n", id, title, artist);
+    
+                playlist.add(filePath);
+            }
+            System.out.println("-----------------------------------------------------------------------------");
+        }
+    }
+    
+
+    private static void playSong(Connection connection) throws Exception {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter the Song Id to play: ");
+        int songId = scanner.nextInt();
+
+        String query = "SELECT file_path FROM songs WHERE id = ?";
+        try (PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+            preparedStatement.setInt(1, songId);
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            if (resultSet.next()) {
+                String filePath = resultSet.getString("file_path");
+                playAudio(filePath);
+                currentSongIndex = playlist.indexOf(filePath);
+            } else {
+                System.out.println("Song not found.");
+            }
+        }
+    }
+
+    private static void playAudio(String filePath) throws JavaLayerException, FileNotFoundException {
+        if (isPlaying) {
+            stopPlaying();
+        }
+
+        FileInputStream fileInputStream = new FileInputStream(filePath);
+        player = new AdvancedPlayer(fileInputStream);
+
+        playerThread = new Thread(() -> {
+            try {
+                player.play();
+            } catch (JavaLayerException e) {
+                e.printStackTrace();
+            }
+        });
+
+        playerThread.start();
+        isPlaying = true;
+    }
+
+    private static void togglePlayPause() {
+        if (isPlaying) {
+            player.close();
+            isPlaying = false;
+            System.out.println("Music paused.");
+        } else {
+            playerThread.resume();
+            isPlaying = true;
+            System.out.println("Music resumed.");
+        }
+    }
+
+    private static void playNextSong(Connection connection) throws Exception {
+        if (isPlaying && currentSongIndex < playlist.size() - 1) {
+            currentSongIndex++;
+            String nextSongFilePath = playlist.get(currentSongIndex);
+            playAudio(nextSongFilePath);
+            System.out.println("Playing next song.");
+        } else if (currentSongIndex == playlist.size() - 1) {
+            System.out.println("No next song in the playlist.");
+        } else {
+            System.out.println("No song is playing to play the next song.");
+        }
+    }
+
+    private static void playPreviousSong(Connection connection) throws Exception {
+        if (isPlaying && currentSongIndex > 0) {
+            currentSongIndex--;
+            String previousSongFilePath = playlist.get(currentSongIndex);
+            playAudio(previousSongFilePath);
+            System.out.println("Playing previous song.");
+        } else if (currentSongIndex == 0) {
+            System.out.println("No previous song in the playlist.");
+        } else {
+            System.out.println("No song is playing to play the previous song.");
+        }
+    }
+
+    private static void stopPlaying() {
+        if (isPlaying) {
+            player.close();
+            isPlaying = false;
+            System.out.println("Music stopped.");
+        } else {
+            System.out.println("No song is playing to stop.");
+        }
+    }
+}
