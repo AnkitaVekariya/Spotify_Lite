@@ -18,7 +18,7 @@
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/YourGitHubUsername/SpotifyLite.git
+    git clone https://github.com/AnkitaVekariya/Spotify_Lite
     ```
 2. Navigate to the project directory:
     ```bash
