@@ -51,3 +51,7 @@
 
 Feel free to fork this project, submit issues, and send pull requests. Contributions are welcome!
 
+## Explore the Code
+
+Check out the full project on GitHub: [ARcademy](https://github.com/AnkitaVekariya/Spotify_Lite)
+
